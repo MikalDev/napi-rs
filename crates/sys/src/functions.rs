@@ -888,8 +888,13 @@ fn find_node_library() -> Result<libloading::Library, libloading::Error> {
   // so the `Library::new` fallbacks would LoadLibrary a stray libnode.dll even
   // when the process image already exports the symbols (a regular node.exe),
   // pulling a second Node runtime into the process as a side effect.
-  return unsafe {
+  unsafe {
     test_library(libloading::os::windows::Library::this())
+      // NW.js: nw.exe is a launcher that exports nothing, and Node.js lives in
+      // nw.dll — the module nw-gyp links addons against as nw.lib. Only probed
+      // as already-loaded, never via `Library::new`: nw.dll is meaningful only
+      // inside a running NW.js process.
+      .or_else(|_| test_library(libloading::os::windows::Library::open_already_loaded("nw")))
       .or_else(|_| {
         test_library(libloading::os::windows::Library::open_already_loaded(
           "libnode",
@@ -902,7 +907,7 @@ fn find_node_library() -> Result<libloading::Library, libloading::Error> {
       })
       .or_else(|_| test_library(libloading::os::windows::Library::new("node")))
       .or_else(|_| test_library(libloading::os::windows::Library::new("libnode")))
-  };
+  }
 }
 
 #[cfg(any(
