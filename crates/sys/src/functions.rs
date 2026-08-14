@@ -888,7 +888,7 @@ fn find_node_library() -> Result<libloading::Library, libloading::Error> {
   // so the `Library::new` fallbacks would LoadLibrary a stray libnode.dll even
   // when the process image already exports the symbols (a regular node.exe),
   // pulling a second Node runtime into the process as a side effect.
-  return unsafe {
+  unsafe {
     test_library(libloading::os::windows::Library::this())
       .or_else(|_| {
         test_library(libloading::os::windows::Library::open_already_loaded(
@@ -900,9 +900,16 @@ fn find_node_library() -> Result<libloading::Library, libloading::Error> {
           "node",
         ))
       })
+      // NW.js: nw.exe is a launcher that exports no Node-API symbols. Its own
+      // delay-load hook (tools/win_delay_load_hook.cc) resolves addon imports
+      // from the already-loaded node.dll first, falling back to nw.dll, so nw
+      // is probed after node and only among already-loaded modules; loading
+      // nw.dll from disk via `Library::new` would be meaningless outside a
+      // running NW.js process.
+      .or_else(|_| test_library(libloading::os::windows::Library::open_already_loaded("nw")))
       .or_else(|_| test_library(libloading::os::windows::Library::new("node")))
       .or_else(|_| test_library(libloading::os::windows::Library::new("libnode")))
-  };
+  }
 }
 
 #[cfg(any(
